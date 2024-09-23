@@ -26,6 +26,7 @@ def download_audio_yt_dlp(video_url):
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'downloaded_audio.mp3',
+        'cookies': 'cookies.txt',  # Add your cookies file here
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -44,6 +45,7 @@ def download_video_yt_dlp(video_url, resolution):
     ydl_opts = {
         'format': f'bestvideo[height<={resolution}]+bestaudio/best',
         'outtmpl': f'downloaded_video_{resolution}.mp4',
+        'cookies': 'cookies.txt',  # Add your cookies file here
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
