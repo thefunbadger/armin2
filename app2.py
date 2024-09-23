@@ -1,6 +1,6 @@
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
-from pytube import YouTube
+import yt_dlp
 import re
 import os
 
@@ -21,43 +21,36 @@ def fetch_transcript(video_id, languages=['en']):
     except Exception as e:
         return f"Error: {e}"
 
-# Function to download YouTube video subtitles if available
-def download_captions(video_id, languages=['en']):
+# Function to download YouTube video as audio (mp3) using yt-dlp
+def download_audio_yt_dlp(video_url):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'downloaded_audio.mp3',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+    }
     try:
-        yt = YouTube(f'https://www.youtube.com/watch?v={video_id}')
-        caption = yt.captions.get_by_language_code(languages[0])
-        if caption:
-            return caption.generate_srt_captions()
-        else:
-            return "No captions available for this video."
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+        return "downloaded_audio.mp3"
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error while downloading audio: {str(e)}"
 
-# Function to download YouTube video as audio (mp3)
-def download_audio(video_url):
+# Function to download YouTube video with selectable quality using yt-dlp
+def download_video_yt_dlp(video_url, resolution):
+    ydl_opts = {
+        'format': f'bestvideo[height<={resolution}]+bestaudio/best',
+        'outtmpl': f'downloaded_video_{resolution}.mp4',
+    }
     try:
-        yt = YouTube(video_url)
-        audio_stream = yt.streams.filter(only_audio=True).first()
-        out_file = audio_stream.download(output_path=".")
-        base, ext = os.path.splitext(out_file)
-        new_file = base + ".mp3"
-        os.rename(out_file, new_file)
-        return new_file
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+        return f"downloaded_video_{resolution}.mp4", None
     except Exception as e:
-        return str(e)
-
-# Function to download YouTube video with selectable quality
-def download_video(video_url, resolution):
-    try:
-        yt = YouTube(video_url)
-        # Filter streams based on the user's selected resolution
-        video_stream = yt.streams.filter(res=resolution, progressive=True).first()
-        if not video_stream:
-            return None, f"No videos available at {resolution} resolution."
-        out_file = video_stream.download(output_path=".")
-        return out_file, None
-    except Exception as e:
-        return None, str(e)
+        return None, f"Error while downloading video: {str(e)}"
 
 # Streamlit UI
 st.title("YouTube Downloader and Transcription Tool")
@@ -87,16 +80,7 @@ if st.button("Download Transcript/Subtitles"):
                         mime="text/plain",
                     )
             else:
-                captions_text = download_captions(video_id, languages)
-                st.text_area("Subtitles", captions_text, height=300)
-                
-                if captions_text and "Error" not in captions_text:
-                    st.download_button(
-                        label="Download Subtitles as SRT",
-                        data=captions_text,
-                        file_name=f"{video_id}_captions.srt",
-                        mime="text/plain",
-                    )
+                st.error("Subtitles downloading is not yet supported.")
         else:
             st.error("Invalid YouTube URL.")
     else:
@@ -107,7 +91,7 @@ st.subheader("2. Download Audio (MP3)")
 
 if st.button("Download MP3"):
     if youtube_url:
-        audio_file = download_audio(youtube_url)
+        audio_file = download_audio_yt_dlp(youtube_url)
         if os.path.exists(audio_file):
             with open(audio_file, "rb") as file:
                 st.download_button(
@@ -128,7 +112,8 @@ video_quality = st.selectbox("Select video quality", ['144p', '360p', '720p', '1
 
 if st.button("Download Video"):
     if youtube_url:
-        video_file, error_message = download_video(youtube_url, video_quality)
+        resolution = int(video_quality.replace('p', ''))
+        video_file, error_message = download_video_yt_dlp(youtube_url, resolution)
         if video_file:
             with open(video_file, "rb") as file:
                 st.download_button(
@@ -138,6 +123,6 @@ if st.button("Download Video"):
                     mime="video/mp4"
                 )
         else:
-            st.error(error_message)
+            st.error(f"Error downloading video: {error_message}")
     else:
         st.error("Please enter a YouTube URL.")
